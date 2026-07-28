@@ -1,121 +1,470 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import * as Tesseract from 'tesseract.js'
 import './App.css'
 
+const COINS_PER_MINUTE = 1 / 10
+const MAX_COINS = 50
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function toDatetimeLocalValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
+}
+
+function parseTimeInGym(text: string): number | null {
+  const normalized = text
+    .toLowerCase()
+    .replace(/[.,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  let totalMs = 0
+  let found = false
+
+  const patterns = [
+    { regex: /(\d+)\s*d(?:ays?)?\b/, ms: 24 * 60 * 60 * 1000 },
+    { regex: /(\d+)\s*h(?:ours?|r)?\b/, ms: 60 * 60 * 1000 },
+    { regex: /(\d+)\s*m(?:in(?:utes?)?)?\b/, ms: 60 * 1000 },
+    { regex: /(\d+)\s*s(?:ec(?:onds?)?)?\b/, ms: 1000 },
+  ]
+
+  for (const { regex, ms } of patterns) {
+    const match = normalized.match(regex)
+    if (match) {
+      totalMs += parseInt(match[1], 10) * ms
+      found = true
+    }
+  }
+
+  if (found) return totalMs
+
+  const hmsMatch = normalized.match(/(\d+):(\d+):(\d+)/)
+  if (hmsMatch) {
+    return (
+      (parseInt(hmsMatch[1], 10) * 3600 +
+        parseInt(hmsMatch[2], 10) * 60 +
+        parseInt(hmsMatch[3], 10)) *
+      1000
+    )
+  }
+
+  const msMatch = normalized.match(/(\d+):(\d+)/)
+  if (msMatch) {
+    return (parseInt(msMatch[1], 10) * 60 + parseInt(msMatch[2], 10)) * 1000
+  }
+
+  return null
+}
+
+function parseCoins(text: string): number | null {
+  const coinMatch = text.match(/\+\s*(\d+)|(\d+)\s*(?:poke)?coins?/i)
+  if (coinMatch) return parseInt(coinMatch[1] || coinMatch[2], 10)
+
+  const numMatch = text.match(/\b(\d{1,4})\b/)
+  if (numMatch) return parseInt(numMatch[1], 10)
+
+  return null
+}
+
+async function recognizeText(file: File): Promise<string> {
+  const result = await Tesseract.recognize(file, 'eng')
+  return result.data.text
+}
+
+function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (!('Notification' in window)) return Promise.resolve('denied')
+  return Notification.requestPermission()
+}
+
+function sendMaxCoinsNotification() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  try {
+    new Notification('Gym Coin Countdown', {
+      body: 'Your Pokémon has earned 50 coins!',
+      icon: '/favicon.svg',
+    })
+  } catch {
+    // Ignore unsupported notification errors.
+  }
+}
+
+let sharedAudioContext: AudioContext | null = null
+
+function getAudioContext(): AudioContext | null {
+  if (sharedAudioContext) return sharedAudioContext
+  const AudioContextCtor: typeof window.AudioContext | undefined =
+    window.AudioContext ??
+    (window as typeof window & { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext
+  if (!AudioContextCtor) return null
+  sharedAudioContext = new AudioContextCtor()
+  return sharedAudioContext
+}
+
+async function unlockAudio() {
+  const ctx = getAudioContext()
+  if (ctx && ctx.state === 'suspended') {
+    await ctx.resume().catch(() => {
+      // Audio may be blocked until the user interacts with the page.
+    })
+  }
+}
+
+async function playHootHoot() {
+  const ctx = getAudioContext()
+  if (!ctx) return
+
+  await ctx.resume().catch(() => {
+    // Audio may be blocked until the user interacts with the page.
+  })
+  if (ctx.state !== 'running') return
+
+  const now = ctx.currentTime
+  const master = ctx.createGain()
+  master.gain.value = 0.4
+  master.connect(ctx.destination)
+
+  const hoot = (start: number, freq: number) => {
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(freq, start)
+
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0, start)
+    gain.gain.linearRampToValueAtTime(0.5, start + 0.05)
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.55)
+
+    osc.connect(gain).connect(master)
+    osc.start(start)
+    osc.stop(start + 0.6)
+  }
+
+  hoot(now, 350)
+  hoot(now + 0.8, 310)
+}
+
+type ImageState = {
+  url: string | null
+  file: File | null
+  ocrText: string
+  scanning: boolean
+}
+
+function createImageState(): ImageState {
+  return { url: null, file: null, ocrText: '', scanning: false }
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const now = new Date()
+  const [placedAt, setPlacedAt] = useState(toDatetimeLocalValue(now))
+  const [currentTime, setCurrentTime] = useState(Date.now())
+  const [gymImage, setGymImage] = useState<ImageState>(createImageState())
+  const [coinsImage, setCoinsImage] = useState<ImageState>(createImageState())
+  const [coinsToday, setCoinsToday] = useState(0)
+  const [coinsTodayInput, setCoinsTodayInput] = useState('0')
+  const [notifyPermission, setNotifyPermission] = useState<NotificationPermission>(() =>
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied'
+  )
+
+  const notifiedRef = useRef(false)
+  const initialRenderRef = useRef(true)
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (gymImage.url) URL.revokeObjectURL(gymImage.url)
+      if (coinsImage.url) URL.revokeObjectURL(coinsImage.url)
+    }
+  }, [gymImage.url, coinsImage.url])
+
+  const placedDate = useMemo(() => new Date(placedAt), [placedAt])
+  const elapsedMs = Math.max(0, currentTime - placedDate.getTime())
+  const minutesInGym = elapsedMs / 60000
+  const remainingDailyCap = Math.max(0, MAX_COINS - coinsToday)
+  const coinsFromThisGym = Math.min(remainingDailyCap, Math.floor(minutesInGym * COINS_PER_MINUTE))
+  const coinsEarned = Math.min(MAX_COINS, coinsToday + coinsFromThisGym)
+  const msForMax = (remainingDailyCap / COINS_PER_MINUTE) * 60000
+  const remainingMs = Math.max(0, msForMax - elapsedMs)
+  const maxed = remainingDailyCap === 0 || elapsedMs >= msForMax
+
+  useEffect(() => {
+    if (initialRenderRef.current) {
+      initialRenderRef.current = false
+      if (maxed) notifiedRef.current = true
+      return
+    }
+
+    if (maxed && !notifiedRef.current) {
+      sendMaxCoinsNotification()
+      void playHootHoot()
+      notifiedRef.current = true
+    }
+
+    if (!maxed) {
+      notifiedRef.current = false
+    }
+  }, [maxed])
+
+  const setImageFile = (setter: React.Dispatch<React.SetStateAction<ImageState>>) => {
+    return (file: File | undefined) => {
+      if (!file) return
+      setter((prev) => {
+        if (prev.url) URL.revokeObjectURL(prev.url)
+        return { ...prev, url: URL.createObjectURL(file), file, ocrText: '' }
+      })
+    }
+  }
+
+  const clearImage = (setter: React.Dispatch<React.SetStateAction<ImageState>>) => {
+    return () => {
+      setter((prev) => {
+        if (prev.url) URL.revokeObjectURL(prev.url)
+        return createImageState()
+      })
+    }
+  }
+
+  const scanGym = async () => {
+    if (!gymImage.file) return
+    setGymImage((prev) => ({ ...prev, scanning: true, ocrText: '' }))
+    try {
+      const text = await recognizeText(gymImage.file)
+      const timeMs = parseTimeInGym(text)
+      setGymImage((prev) => ({ ...prev, ocrText: text, scanning: false }))
+      if (timeMs !== null) {
+        setPlacedAt(toDatetimeLocalValue(new Date(Date.now() - timeMs)))
+      }
+    } catch {
+      setGymImage((prev) => ({ ...prev, scanning: false, ocrText: 'OCR failed. Try again.' }))
+    }
+  }
+
+  const scanCoins = async () => {
+    if (!coinsImage.file) return
+    setCoinsImage((prev) => ({ ...prev, scanning: true, ocrText: '' }))
+    try {
+      const text = await recognizeText(coinsImage.file)
+      const coins = parseCoins(text)
+      setCoinsImage((prev) => ({ ...prev, ocrText: text, scanning: false }))
+      if (coins !== null) {
+        setCoinsToday(coins)
+        setCoinsTodayInput(String(coins))
+      }
+    } catch {
+      setCoinsImage((prev) => ({ ...prev, scanning: false, ocrText: 'OCR failed. Try again.' }))
+    }
+  }
+
+  const resetAll = () => {
+    const resetTime = new Date()
+    resetTime.setMilliseconds(0)
+    setCurrentTime(resetTime.getTime())
+    setPlacedAt(toDatetimeLocalValue(resetTime))
+    setCoinsToday(0)
+    setCoinsTodayInput('0')
+    clearImage(setGymImage)()
+    clearImage(setCoinsImage)()
+    notifiedRef.current = false
+    void unlockAudio()
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <main className="container">
+      <h1>Gym Coin Countdown</h1>
 
-      <div className="ticks"></div>
+      <section className="timer-card">
+        <label className="input-row">
+          <span>Pokémon placed in gym at</span>
+          <input
+            type="datetime-local"
+            step="1"
+            lang="en-GB"
+            value={placedAt}
+            onChange={(e) => setPlacedAt(e.target.value)}
+          />
+        </label>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        <label className="input-row">
+          <span>Coins earned today</span>
+          <input
+            type="number"
+            min={0}
+            value={coinsTodayInput}
+            onChange={(e) => {
+              const value = e.target.value
+              setCoinsTodayInput(value)
+              if (value !== '') {
+                setCoinsToday(Math.max(0, parseInt(value, 10) || 0))
+              }
+            }}
+            onBlur={() => {
+              if (coinsTodayInput === '') {
+                setCoinsTodayInput('0')
+                setCoinsToday(0)
+              }
+            }}
+          />
+        </label>
+
+        <div className="stats">
+          <div className="stat">
+            <span className="stat-label">Time in gym</span>
+            <span className="stat-value">{formatDuration(elapsedMs)}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Coins earned</span>
+            <span className="stat-value">{coinsEarned} / {MAX_COINS}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">{maxed ? 'Maxed out' : 'Time to 50 Chioins'}</span>
+            <span className="stat-value">{maxed ? '—' : formatDuration(remainingMs)}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Coins today</span>
+            <span className="stat-value">{coinsToday}</span>
+          </div>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+
+        <div className="alert-row">
+          {notifyPermission === 'default' && (
+            <button
+              type="button"
+              onClick={async () => {
+                await unlockAudio()
+                const permission = await requestNotificationPermission()
+                setNotifyPermission(permission)
+                if (permission === 'granted') await playHootHoot()
+              }}
+            >
+              Enable 50-coin alert
+            </button>
+          )}
+          {notifyPermission === 'granted' && (
+            <span className="alert-status">Alerts enab</span>
+          )}
+          {notifyPermission === 'denied' && (
+            <span className="alert-status">Notifications blocked in browser</span>
+          )}
+          <button type="button" className="secondary" onClick={resetAll}>
+            Reset
+          </button>
         </div>
       </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {elapsedMs === 0 && (
+        <section className="images">
+          <ImageCard
+            title="Gym screenshot"
+            state={gymImage}
+            onFile={setImageFile(setGymImage)}
+            onClear={clearImage(setGymImage)}
+            onScan={scanGym}
+            scanLabel="Scan time in gym"
+          />
+          <ImageCard
+            title="Coins earned today"
+            state={coinsImage}
+            onFile={setImageFile(setCoinsImage)}
+            onClear={clearImage(setCoinsImage)}
+            onScan={scanCoins}
+            scanLabel="Scan coin count"
+          />
+        </section>
+      )}
+    </main>
+  )
+}
+
+function ImageCard({
+  title,
+  state,
+  onFile,
+  onClear,
+  onScan,
+  scanLabel,
+}: {
+  title: string
+  state: ImageState
+  onFile: (file: File | undefined) => void
+  onClear: () => void
+  onScan: () => void
+  scanLabel: string
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith('image/')) {
+      onFile(file)
+    }
+  }
+
+  return (
+    <div
+      className={`image-card ${isDragging ? 'dragging' : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setIsDragging(true)
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={onDrop}
+    >
+      <h2>{title}</h2>
+      {state.url ? (
+        <>
+          <img src={state.url} alt={title} />
+          <div className="image-actions">
+            <button
+              type="button"
+              onClick={onScan}
+              disabled={state.scanning}
+            >
+              {state.scanning ? 'Scanning…' : scanLabel}
+            </button>
+            <button type="button" className="secondary" onClick={onClear}>
+              Remove
+            </button>
+          </div>
+          {state.ocrText && (
+            <div className="ocr-result">
+              <strong>Recognized text</strong>
+              <pre>{state.ocrText}</pre>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p>Drag and drop an image, or choose one to upload.</p>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+          <button type="button" onClick={() => inputRef.current?.click()}>
+            Choose image
+          </button>
+        </>
+      )}
+    </div>
   )
 }
 
