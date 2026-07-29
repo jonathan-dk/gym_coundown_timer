@@ -179,6 +179,9 @@ function App() {
 
   const notifiedRef = useRef(false)
   const initialRenderRef = useRef(true)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const [feedbackEmail, setFeedbackEmail] = useState('')
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
@@ -283,13 +286,25 @@ function App() {
     void unlockAudio()
   }
 
+  const submitFeedback = (e: React.FormEvent) => {
+    e.preventDefault()
+    const subject = encodeURIComponent('Gym Coin Countdown Feedback')
+    const body = encodeURIComponent(
+      `${feedbackMessage}\n\nFrom: ${feedbackEmail || 'not provided'}`
+    )
+    window.location.href = `mailto:jonathan.dk@gmail.com?subject=${subject}&body=${body}`
+    setFeedbackOpen(false)
+    setFeedbackMessage('')
+    setFeedbackEmail('')
+  }
+
   return (
     <main className="container">
       <h1>Gym Coin Countdown</h1>
 
       <section className="timer-card">
         <label className="input-row">
-          <span>Pokémon placed in gym at</span>
+          <span>Pokémon placed in gym at {placedAt.slice(11, 16)} on {new Date(placedAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
           <input
             type="datetime-local"
             step="1"
@@ -334,10 +349,6 @@ function App() {
             <span className="stat-label">{maxed ? 'Maxed out' : 'Time to 50 Chioins'}</span>
             <span className="stat-value">{maxed ? '—' : formatDuration(remainingMs)}</span>
           </div>
-          <div className="stat">
-            <span className="stat-label">Coins today</span>
-            <span className="stat-value">{coinsToday}</span>
-          </div>
         </div>
 
         <div className="alert-row">
@@ -355,7 +366,7 @@ function App() {
             </button>
           )}
           {notifyPermission === 'granted' && (
-            <span className="alert-status">Alerts enab</span>
+            <span className="alert-status">Alerts enabled"</span>
           )}
           {notifyPermission === 'denied' && (
             <span className="alert-status">Notifications blocked in browser</span>
@@ -363,7 +374,50 @@ function App() {
           <button type="button" className="secondary" onClick={resetAll}>
             Reset
           </button>
+          <button
+            type="button"
+            className="feedback-button"
+            onClick={() => setFeedbackOpen((open) => !open)}
+            aria-expanded={feedbackOpen}
+          >
+            Feedback
+          </button>
         </div>
+
+        {feedbackOpen && (
+          <form className="feedback-form" onSubmit={submitFeedback}>
+            <label className="feedback-field">
+              Message
+              <textarea
+                required
+                rows={4}
+                value={feedbackMessage}
+                onChange={(e) => setFeedbackMessage(e.target.value)}
+                placeholder="Tell us what’s on your mind..."
+              />
+            </label>
+            <label className="feedback-field">
+              Your E-mail (Required)
+              <input
+                type="email"
+                required
+                value={feedbackEmail}
+                onChange={(e) => setFeedbackEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </label>
+            <div className="feedback-actions">
+              <button type="submit">Send feedback</button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setFeedbackOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
       {elapsedMs === 0 && (
@@ -386,6 +440,7 @@ function App() {
           />
         </section>
       )}
+
     </main>
   )
 }
