@@ -1,0 +1,11 @@
+.input-row.coins-input {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+
+  input[type='number'] {
+    padding: 14px 18px;
+    font-size: 1.1rem;
+  }
+}

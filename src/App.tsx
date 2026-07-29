@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as Tesseract from 'tesseract.js'
+import { QRCodeSVG } from 'qrcode.react'
+import { CoinsInput } from './CoinsInput'
+import { StatsDisplay } from './StatsDisplay'
 import './App.css'
 
 const COINS_PER_MINUTE = 1 / 10
@@ -172,7 +175,6 @@ function App() {
   const [gymImage, setGymImage] = useState<ImageState>(createImageState())
   const [coinsImage, setCoinsImage] = useState<ImageState>(createImageState())
   const [coinsToday, setCoinsToday] = useState(0)
-  const [coinsTodayInput, setCoinsTodayInput] = useState('0')
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission>(() =>
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied'
   )
@@ -182,6 +184,7 @@ function App() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState('')
+  const [shareOpen, setShareOpen] = useState(false)
   const [dateInputVisible, setDateInputVisible] = useState(false)
 
   useEffect(() => {
@@ -267,7 +270,6 @@ function App() {
       setCoinsImage((prev) => ({ ...prev, ocrText: text, scanning: false }))
       if (coins !== null) {
         setCoinsToday(coins)
-        setCoinsTodayInput(String(coins))
       }
     } catch {
       setCoinsImage((prev) => ({ ...prev, scanning: false, ocrText: 'OCR failed. Try again.' }))
@@ -280,7 +282,6 @@ function App() {
     setCurrentTime(resetTime.getTime())
     setPlacedAt(toDatetimeLocalValue(resetTime))
     setCoinsToday(0)
-    setCoinsTodayInput('0')
     clearImage(setGymImage)()
     clearImage(setCoinsImage)()
     notifiedRef.current = false
@@ -306,10 +307,10 @@ function App() {
       <section className="timer-card">
         <label className="input-row">
           <span>
-            Pokémon placed in gym at {placedAt.slice(11, 16)} on{' '}
+            Mon placed in gym at {placedAt.slice(11, 16)} on{' '}
             {new Date(placedAt).toLocaleDateString('en-GB', {
               year: 'numeric',
-              month: 'short',
+              month:'short',
               day: 'numeric',
             })}
             <button
@@ -332,42 +333,15 @@ function App() {
           )}
         </label>
 
-        <label className="input-row">
-          <span>Coins earned today</span>
-          <input
-            type="number"
-            min={0}
-            value={coinsTodayInput}
-            onChange={(e) => {
-              const value = e.target.value
-              setCoinsTodayInput(value)
-              if (value !== '') {
-                setCoinsToday(Math.max(0, parseInt(value, 10) || 0))
-              }
-            }}
-            onBlur={() => {
-              if (coinsTodayInput === '') {
-                setCoinsTodayInput('0')
-                setCoinsToday(0)
-              }
-            }}
-          />
-        </label>
+        <CoinsInput value={coinsToday} onChange={setCoinsToday} />
 
-        <div className="stats">
-          <div className="stat">
-            <span className="stat-label">Time in gym</span>
-            <span className="stat-value">{formatDuration(elapsedMs)}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">Coins earned</span>
-            <span className="stat-value">{coinsEarned} / {MAX_COINS}</span>
-          </div>
-          <div className="stat">
-            <span className="stat-label">{maxed ? 'Maxed out' : 'Time to 50 Chioins'}</span>
-            <span className="stat-value">{maxed ? '—' : formatDuration(remainingMs)}</span>
-          </div>
-        </div>
+        <StatsDisplay
+          timeInGym={formatDuration(elapsedMs)}
+          coinsEarned={coinsEarned}
+          coinsMax={MAX_COINS}
+          remainingTime={formatDuration(remainingMs)}
+          maxed={maxed}
+        />
 
         <div className="alert-row">
           {notifyPermission === 'default' && (
@@ -389,8 +363,15 @@ function App() {
           {notifyPermission === 'denied' && (
             <span className="alert-status">Notifications blocked in browser</span>
           )}
-          <button type="button" className="secondary" onClick={resetAll}>
+          <button type="button" className="secondary reset-button" onClick={resetAll}>
             Reset
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => setShareOpen(true)}
+          >
+            Share
           </button>
           <button
             type="button"
@@ -455,6 +436,52 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {shareOpen && (
+          <div
+            className="feedback-modal-backdrop"
+            onClick={() => setShareOpen(false)}
+            role="presentation"
+          >
+            <div
+              className="feedback-form share-form"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="feedback-header">
+                <h2>Share this app</h2>
+                <button
+                  type="button"
+                  className="feedback-close"
+                  onClick={() => setShareOpen(false)}
+                  aria-label="Close share dialog"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="qr-code">
+                <QRCodeSVG value={window.location.href} size={200} level="M" />
+              </div>
+              <p className="share-url">{window.location.href}</p>
+              <div className="feedback-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(window.location.href)
+                  }}
+                >
+                  Copy link
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setShareOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>

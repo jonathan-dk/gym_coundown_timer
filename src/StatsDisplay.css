@@ -1,0 +1,42 @@
+.stats {
+  display: flex;
+  gap: 16px;
+
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+.stat {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--accent-bg);
+  text-align: center;
+
+  @media (max-width: 1024px) {
+    padding: 12px;
+  }
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.stat-value {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-h);
+  word-break: break-word;
+
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
