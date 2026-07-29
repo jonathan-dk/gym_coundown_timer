@@ -182,6 +182,7 @@ function App() {
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState('')
+  const [dateInputVisible, setDateInputVisible] = useState(false)
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
@@ -304,14 +305,31 @@ function App() {
 
       <section className="timer-card">
         <label className="input-row">
-          <span>Pokémon placed in gym at {placedAt.slice(11, 16)} on {new Date(placedAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-          <input
-            type="datetime-local"
-            step="1"
-            lang="en-GB"
-            value={placedAt}
-            onChange={(e) => setPlacedAt(e.target.value)}
-          />
+          <span>
+            Pokémon placed in gym at {placedAt.slice(11, 16)} on{' '}
+            {new Date(placedAt).toLocaleDateString('en-GB', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+            })}
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setDateInputVisible((visible) => !visible)}
+              aria-expanded={dateInputVisible}
+            >
+              Change Date & Time
+            </button>
+          </span>
+          {dateInputVisible && (
+            <input
+              type="datetime-local"
+              step="1"
+              lang="en-GB"
+              value={placedAt}
+              onChange={(e) => setPlacedAt(e.target.value)}
+            />
+          )}
         </label>
 
         <label className="input-row">
@@ -366,7 +384,7 @@ function App() {
             </button>
           )}
           {notifyPermission === 'granted' && (
-            <span className="alert-status">Alerts enabled"</span>
+            <span className="alert-status">Alert enabled!</span>
           )}
           {notifyPermission === 'denied' && (
             <span className="alert-status">Notifications blocked in browser</span>
@@ -385,38 +403,59 @@ function App() {
         </div>
 
         {feedbackOpen && (
-          <form className="feedback-form" onSubmit={submitFeedback}>
-            <label className="feedback-field">
-              Message
-              <textarea
-                required
-                rows={4}
-                value={feedbackMessage}
-                onChange={(e) => setFeedbackMessage(e.target.value)}
-                placeholder="Tell us what’s on your mind..."
-              />
-            </label>
-            <label className="feedback-field">
-              Your E-mail (Required)
-              <input
-                type="email"
-                required
-                value={feedbackEmail}
-                onChange={(e) => setFeedbackEmail(e.target.value)}
-                placeholder="you@example.com"
-              />
-            </label>
-            <div className="feedback-actions">
-              <button type="submit">Send feedback</button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setFeedbackOpen(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+          <div
+            className="feedback-modal-backdrop"
+            onClick={() => setFeedbackOpen(false)}
+            role="presentation"
+          >
+            <form
+              className="feedback-form"
+              onSubmit={submitFeedback}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="feedback-header">
+                <h2>Send feedback</h2>
+                <button
+                  type="button"
+                  className="feedback-close"
+                  onClick={() => setFeedbackOpen(false)}
+                  aria-label="Close feedback form"
+                >
+                  ×
+                </button>
+              </div>
+              <label className="feedback-field">
+                Message
+                <textarea
+                  required
+                  rows={4}
+                  value={feedbackMessage}
+                  onChange={(e) => setFeedbackMessage(e.target.value)}
+                  placeholder="Tell us what’s on your mind..."
+                />
+              </label>
+              <label className="feedback-field">
+                Your E-mail (Required)
+                <input
+                  type="email"
+                  required
+                  value={feedbackEmail}
+                  onChange={(e) => setFeedbackEmail(e.target.value)}
+                  placeholder="you@example.com"
+                />
+              </label>
+              <div className="feedback-actions">
+                <button type="submit">Send feedback</button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setFeedbackOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         )}
       </section>
 
