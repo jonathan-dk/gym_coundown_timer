@@ -465,14 +465,14 @@ function App() {
                 </button>
               </div>
               <div className="qr-code">
-                <QRCodeSVG value={window.location.href} size={200} level="M" />
+                <QRCodeSVG value={'https://buymeacoffee.com/jonathan.dk/e/561056'} size={200} level="M" />
               </div>
-              <p className="share-url">{window.location.href}</p>
+              <p className="share-url">{'https://buymeacoffee.com/jonathan.dk/e/561056'}</p>
               <div className="feedback-actions">
                 <button
                   type="button"
                   onClick={() => {
-                    void navigator.clipboard?.writeText(window.location.href)
+                    void navigator.clipboard?.writeText('https://buymeacoffee.com/jonathan.dk/e/561056')
                   }}
                 >
                   Copy link
