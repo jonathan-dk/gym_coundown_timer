@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as Tesseract from 'tesseract.js'
 import { QRCodeSVG } from 'qrcode.react'
+import { BuyMeACoffee } from './BuyMeACoffee'
 import { CoinsInput } from './CoinsInput'
 import { StatsDisplay } from './StatsDisplay'
 import './App.css'
@@ -227,6 +228,8 @@ function App() {
     }
   }, [maxed])
 
+
+
   const setImageFile = (setter: React.Dispatch<React.SetStateAction<ImageState>>) => {
     return (file: File | undefined) => {
       if (!file) return
@@ -354,7 +357,7 @@ function App() {
                 if (permission === 'granted') await playHootHoot()
               }}
             >
-              Enable 50-coin alert
+              Alert
             </button>
           )}
           {notifyPermission === 'granted' && (
@@ -382,6 +385,7 @@ function App() {
             Feedback
           </button>
         </div>
+        <BuyMeACoffee />
 
         {feedbackOpen && (
           <div

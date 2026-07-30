@@ -95,6 +95,11 @@ p {
   margin: 0;
 }
 
+#bmc-root {
+  display: flex;
+  justify-content: center;
+}
+
 code,
 .counter {
   font-family: var(--mono);
