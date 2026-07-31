@@ -186,6 +186,7 @@ function App() {
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState('')
   const [shareOpen, setShareOpen] = useState(false)
+  const [alarmNoticeOpen, setAlarmNoticeOpen] = useState(false)
   const [dateInputVisible, setDateInputVisible] = useState(false)
 
   useEffect(() => {
@@ -355,6 +356,7 @@ function App() {
                 const permission = await requestNotificationPermission()
                 setNotifyPermission(permission)
                 if (permission === 'granted') await playHootHoot()
+                setAlarmNoticeOpen(true)
               }}
             >
               Alert
@@ -440,6 +442,40 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {alarmNoticeOpen && (
+          <div
+            className="feedback-modal-backdrop"
+            onClick={() => setAlarmNoticeOpen(false)}
+            role="presentation"
+          >
+            <div
+              className="feedback-form"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="feedback-header">
+                <h2>Alert enabled</h2>
+                <button
+                  type="button"
+                  className="feedback-close"
+                  onClick={() => setAlarmNoticeOpen(false)}
+                  aria-label="Close notification notice"
+                >
+                  ×
+                </button>
+              </div>
+              <p>Do not close this app if you wish to receive notifications!</p>
+              <div className="feedback-actions">
+                <button
+                  type="button"
+                  onClick={() => setAlarmNoticeOpen(false)}
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
