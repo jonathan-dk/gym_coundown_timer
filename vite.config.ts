@@ -27,7 +27,7 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 3001, // Change this to any port you prefer (e.g., 3000, 4000, 8080)
+    port: 3002, // Change this to any port you prefer (e.g., 3000, 4000, 8080)
     strictPort: true, // Forces Vite to fail if the port is taken, rather than silently switching
   }
 })
