@@ -4,6 +4,9 @@ import { QRCodeSVG } from 'qrcode.react'
 import { BuyMeACoffee } from './BuyMeACoffee'
 import { CoinsInput } from './CoinsInput'
 import { StatsDisplay } from './StatsDisplay'
+import { LanguageSelector } from './LanguageSelector'
+import { t, formatDate, localeToBcp47, type Locale } from './i18n'
+import { useLocale } from './i18n/useLocale'
 import './App.css'
 
 const COINS_PER_MINUTE = 1 / 10
@@ -92,11 +95,11 @@ function requestNotificationPermission(): Promise<NotificationPermission> {
   return Notification.requestPermission()
 }
 
-function sendMaxCoinsNotification() {
+function sendMaxCoinsNotification(locale: Locale) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return
   try {
-    new Notification('Gym Coin Countdown', {
-      body: 'Your Pokémon has earned 50 coins!',
+    new Notification(t(locale, 'notificationTitle'), {
+      body: t(locale, 'notificationBody'),
       icon: '/favicon.svg',
     })
   } catch {
@@ -170,6 +173,7 @@ function createImageState(): ImageState {
 }
 
 function App() {
+  const { locale } = useLocale()
   const now = new Date()
   const [placedAt, setPlacedAt] = useState(toDatetimeLocalValue(now))
   const [currentTime, setCurrentTime] = useState(Date.now())
@@ -188,6 +192,11 @@ function App() {
   const [shareOpen, setShareOpen] = useState(false)
   const [alarmNoticeOpen, setAlarmNoticeOpen] = useState(false)
   const [dateInputVisible, setDateInputVisible] = useState(false)
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+    document.title = t(locale, 'pageTitle')
+  }, [locale])
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
@@ -219,7 +228,7 @@ function App() {
     }
 
     if (maxed && !notifiedRef.current) {
-      sendMaxCoinsNotification()
+      sendMaxCoinsNotification(locale)
       void playHootHoot()
       notifiedRef.current = true
     }
@@ -227,7 +236,7 @@ function App() {
     if (!maxed) {
       notifiedRef.current = false
     }
-  }, [maxed])
+  }, [maxed, locale])
 
 
 
@@ -261,7 +270,7 @@ function App() {
         setPlacedAt(toDatetimeLocalValue(new Date(Date.now() - timeMs)))
       }
     } catch {
-      setGymImage((prev) => ({ ...prev, scanning: false, ocrText: 'OCR failed. Try again.' }))
+      setGymImage((prev) => ({ ...prev, scanning: false, ocrText: t(locale, 'ocrFailed') }))
     }
   }
 
@@ -276,7 +285,7 @@ function App() {
         setCoinsToday(coins)
       }
     } catch {
-      setCoinsImage((prev) => ({ ...prev, scanning: false, ocrText: 'OCR failed. Try again.' }))
+      setCoinsImage((prev) => ({ ...prev, scanning: false, ocrText: t(locale, 'ocrFailed') }))
     }
   }
 
@@ -294,9 +303,9 @@ function App() {
 
   const submitFeedback = (e: React.FormEvent) => {
     e.preventDefault()
-    const subject = encodeURIComponent('Gym Coin Countdown Feedback')
+    const subject = encodeURIComponent(t(locale, 'feedbackSubject'))
     const body = encodeURIComponent(
-      `${feedbackMessage}\n\nFrom: ${feedbackEmail || 'not provided'}`
+      `${feedbackMessage}\n\n${t(locale, 'feedbackFrom')} ${feedbackEmail || t(locale, 'notProvided')}`
     )
     window.location.href = `mailto:jonathan.dk@gmail.com?subject=${subject}&body=${body}`
     setFeedbackOpen(false)
@@ -306,16 +315,20 @@ function App() {
 
   return (
     <main className="container">
-      <h1>Gym Coin Countdown</h1>
+      <header className="app-header">
+        <LanguageSelector />
+      </header>
+      <h1>{t(locale, 'appTitle')}</h1>
 
       <section className="timer-card">
         <label className="input-row">
           <span>
-            Mon placed in gym at {placedAt.slice(11, 16)} on{' '}
-            {new Date(placedAt).toLocaleDateString('en-GB', {
-              year: 'numeric',
-              month:'short',
-              day: 'numeric',
+            {t(locale, 'placedInGym', {
+              time: new Date(placedAt).toLocaleTimeString(localeToBcp47(locale), {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              date: formatDate(new Date(placedAt), locale),
             })}
             <button
               type="button"
@@ -323,14 +336,14 @@ function App() {
               onClick={() => setDateInputVisible((visible) => !visible)}
               aria-expanded={dateInputVisible}
             >
-              Change Date & Time
+              {t(locale, 'changeDateTime')}
             </button>
           </span>
           {dateInputVisible && (
             <input
               type="datetime-local"
               step="1"
-              lang="en-GB"
+              lang={localeToBcp47(locale)}
               value={placedAt}
               onChange={(e) => setPlacedAt(e.target.value)}
             />
@@ -349,7 +362,7 @@ function App() {
 
         <div className="alert-row">
           {notifyPermission === 'default' && (
-            <button
+              <button
               type="button"
               onClick={async () => {
                 await unlockAudio()
@@ -359,24 +372,24 @@ function App() {
                 setAlarmNoticeOpen(true)
               }}
             >
-              Alert
+              {t(locale, 'alert')}
             </button>
           )}
           {notifyPermission === 'granted' && (
-            <span className="alert-status">Alert enabled!</span>
+            <span className="alert-status">{t(locale, 'alertEnabled')}</span>
           )}
           {notifyPermission === 'denied' && (
-            <span className="alert-status">Notifications blocked in browser</span>
+            <span className="alert-status">{t(locale, 'notificationsBlocked')}</span>
           )}
           <button type="button" className="secondary reset-button" onClick={resetAll}>
-            Reset
+            {t(locale, 'reset')}
           </button>
           <button
             type="button"
             className="secondary"
             onClick={() => setShareOpen(true)}
           >
-            Share
+            {t(locale, 'share')}
           </button>
           <button
             type="button"
@@ -384,7 +397,7 @@ function App() {
             onClick={() => setFeedbackOpen((open) => !open)}
             aria-expanded={feedbackOpen}
           >
-            Feedback
+            {t(locale, 'feedback')}
           </button>
         </div>
         <BuyMeACoffee />
@@ -401,44 +414,44 @@ function App() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="feedback-header">
-                <h2>Send feedback</h2>
+                <h2>{t(locale, 'sendFeedback')}</h2>
                 <button
                   type="button"
                   className="feedback-close"
                   onClick={() => setFeedbackOpen(false)}
-                  aria-label="Close feedback form"
+                  aria-label={t(locale, 'closeFeedbackForm')}
                 >
                   ×
                 </button>
               </div>
               <label className="feedback-field">
-                Message
+                {t(locale, 'message')}
                 <textarea
                   required
                   rows={4}
                   value={feedbackMessage}
                   onChange={(e) => setFeedbackMessage(e.target.value)}
-                  placeholder="Tell us what’s on your mind..."
+                  placeholder={t(locale, 'messagePlaceholder')}
                 />
               </label>
               <label className="feedback-field">
-                Your E-mail (Required)
+                {t(locale, 'email')}
                 <input
                   type="email"
                   required
                   value={feedbackEmail}
                   onChange={(e) => setFeedbackEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={t(locale, 'emailPlaceholder')}
                 />
               </label>
               <div className="feedback-actions">
-                <button type="submit">Send feedback</button>
+                <button type="submit">{t(locale, 'sendFeedback')}</button>
                 <button
                   type="button"
                   className="secondary"
                   onClick={() => setFeedbackOpen(false)}
                 >
-                  Cancel
+                  {t(locale, 'cancel')}
                 </button>
               </div>
             </form>
@@ -456,23 +469,23 @@ function App() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="feedback-header">
-                <h2>Alert enabled</h2>
+                <h2>{t(locale, 'alertEnabledTitle')}</h2>
                 <button
                   type="button"
                   className="feedback-close"
                   onClick={() => setAlarmNoticeOpen(false)}
-                  aria-label="Close notification notice"
+                  aria-label={t(locale, 'closeNotificationNotice')}
                 >
                   ×
                 </button>
               </div>
-              <p>Do not close this app if you wish to receive notifications!</p>
+              <p>{t(locale, 'keepAppOpen')}</p>
               <div className="feedback-actions">
                 <button
                   type="button"
                   onClick={() => setAlarmNoticeOpen(false)}
                 >
-                  Got it
+                  {t(locale, 'gotIt')}
                 </button>
               </div>
             </div>
@@ -490,12 +503,12 @@ function App() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="feedback-header">
-                <h2>Share this app</h2>
+                <h2>{t(locale, 'shareThisApp')}</h2>
                 <button
                   type="button"
                   className="feedback-close"
                   onClick={() => setShareOpen(false)}
-                  aria-label="Close share dialog"
+                  aria-label={t(locale, 'closeShareDialog')}
                 >
                   ×
                 </button>
@@ -511,14 +524,14 @@ function App() {
                     void navigator.clipboard?.writeText('https://buymeacoffee.com/jonathan.dk/e/561056')
                   }}
                 >
-                  Copy link
+                  {t(locale, 'copyLink')}
                 </button>
                 <button
                   type="button"
                   className="secondary"
                   onClick={() => setShareOpen(false)}
                 >
-                  Close
+                  {t(locale, 'close')}
                 </button>
               </div>
             </div>
@@ -529,20 +542,20 @@ function App() {
       {elapsedMs === 0 && (
         <section className="images">
           <ImageCard
-            title="Gym screenshot"
+            title={t(locale, 'gymScreenshot')}
             state={gymImage}
             onFile={setImageFile(setGymImage)}
             onClear={clearImage(setGymImage)}
             onScan={scanGym}
-            scanLabel="Scan time in gym"
+            scanLabel={t(locale, 'scanTimeInGym')}
           />
           <ImageCard
-            title="Coins earned today"
+            title={t(locale, 'coinsEarnedTodayScreenshot')}
             state={coinsImage}
             onFile={setImageFile(setCoinsImage)}
             onClear={clearImage(setCoinsImage)}
             onScan={scanCoins}
-            scanLabel="Scan coin count"
+            scanLabel={t(locale, 'scanCoinCount')}
           />
         </section>
       )}
@@ -566,6 +579,7 @@ function ImageCard({
   onScan: () => void
   scanLabel: string
 }) {
+  const { locale } = useLocale()
   const inputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -598,22 +612,22 @@ function ImageCard({
               onClick={onScan}
               disabled={state.scanning}
             >
-              {state.scanning ? 'Scanning…' : scanLabel}
+              {state.scanning ? t(locale, 'scanning') : scanLabel}
             </button>
             <button type="button" className="secondary" onClick={onClear}>
-              Remove
+              {t(locale, 'remove')}
             </button>
           </div>
           {state.ocrText && (
             <div className="ocr-result">
-              <strong>Recognized text</strong>
+              <strong>{t(locale, 'recognizedText')}</strong>
               <pre>{state.ocrText}</pre>
             </div>
           )}
         </>
       ) : (
         <>
-          <p>Drag and drop an image, or choose one to upload.</p>
+          <p>{t(locale, 'dragDropOrUpload')}</p>
           <input
             ref={inputRef}
             type="file"
@@ -621,7 +635,7 @@ function ImageCard({
             onChange={(e) => onFile(e.target.files?.[0])}
           />
           <button type="button" onClick={() => inputRef.current?.click()}>
-            Choose image
+            {t(locale, 'chooseImage')}
           </button>
         </>
       )}

@@ -1,3 +1,5 @@
+import { t } from './i18n'
+import { useLocale } from './i18n/useLocale'
 import './StatsDisplay.css'
 
 type StatsDisplayProps = {
@@ -15,18 +17,19 @@ export function StatsDisplay({
   remainingTime,
   maxed,
 }: StatsDisplayProps) {
+  const { locale } = useLocale()
   return (
     <div className="stats">
       <div className="stat">
-        <span className="stat-label">Time in gym</span>
+        <span className="stat-label">{t(locale, 'timeInGym')}</span>
         <span className="stat-value">{timeInGym}</span>
       </div>
       <div className="stat">
-        <span className="stat-label">Coins earned</span>
+        <span className="stat-label">{t(locale, 'coinsEarned')}</span>
         <span className="stat-value">{coinsEarned} / {coinsMax}</span>
       </div>
       <div className="stat">
-        <span className="stat-label">{maxed ? 'Maxed out' : 'Time to 50 Chioins'}</span>
+        <span className="stat-label">{maxed ? t(locale, 'maxedOut') : t(locale, 'timeToMaxCoins')}</span>
         <span className="stat-value">{maxed ? '—' : remainingTime}</span>
       </div>
     </div>

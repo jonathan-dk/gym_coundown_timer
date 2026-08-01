@@ -9,9 +9,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Gym Coin Countdown',
-        short_name: 'GymCoins',
-        description: 'Track your Pokémon gym coin earnings and countdown timer.',
+        name: 'Gym Møntenedtæller',
+        short_name: 'GymMønter',
+        description: 'Hold styr på dine Pokémon gym-møntindtægter og nedtællingsur.',
+        lang: 'da',
         theme_color: '#aa3bff',
         background_color: '#ffffff',
         display: 'standalone',

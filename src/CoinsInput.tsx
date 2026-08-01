@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { t } from './i18n'
+import { useLocale } from './i18n/useLocale'
 import './CoinsInput.css'
 
 type CoinsInputProps = {
@@ -8,6 +10,7 @@ type CoinsInputProps = {
 
 export function CoinsInput({ value, onChange }: CoinsInputProps) {
   const [inputValue, setInputValue] = useState(String(value))
+  const { locale } = useLocale()
 
   useEffect(() => {
     setInputValue(String(value))
@@ -15,7 +18,7 @@ export function CoinsInput({ value, onChange }: CoinsInputProps) {
 
   return (
     <label className="input-row horizontal coins-input">
-      <span>Coins earned today:</span>
+      <span>{t(locale, 'coinsEarnedToday')}</span>
       <input
         type="number"
         min={0}
